@@ -117,13 +117,6 @@ const PlaceBidPayload = Record({
   bidAmount: nat64,
 });
 
-// const TransactionPayload = Record({
-//   nftId: text,
-//   buyerId: text,
-//   sellerId: text,
-//   price: nat64,
-// });
-
 // Storage
 const artistStorage = StableBTreeMap(0, text, Artist);
 const artworkStorage = StableBTreeMap(1, text, Artwork);
@@ -151,8 +144,27 @@ function isEmailUnique(email: string): bool {
 function validateWalletAddress(walletAddress: string): boolean {
   // Regex for ICP wallet address (64-character hexadecimal string)
   const walletAddressRegex = /^[a-fA-F0-9]{64}$/;
-
   return walletAddressRegex.test(walletAddress);
+}
+
+// Function to check if artist exists
+function getArtistById(artistId: string) {
+  return artistStorage.values().find((artist) => artist.id === artistId);
+}
+
+// Function to check if artwork exists
+function getArtworkById(artworkId: string) {
+  return artworkStorage.get(artworkId);
+}
+
+// Function to check if NFT exists
+function getNFTById(nftId: string) {
+  return nftStorage.get(nftId);
+}
+
+// Function to check if auction exists
+function getAuctionById(auctionId: string) {
+  return auctionStorage.get(auctionId);
 }
 
 // Functions
@@ -198,14 +210,12 @@ export default Canister({
   // Function to create artwork
   mintArtwork: update([ArtworkPayload], Result(Artwork, Message), (payload) => {
     // Ensure all the required fields are provided
-    if (!payload.title && !payload.imageUrl && !payload.description) {
+    if (!payload.title || !payload.imageUrl || !payload.description) {
       return Err({ InvalidPayload: "All fields are required" });
     }
 
     // Check if the artist exists
-    const artistOpt = artistStorage
-      .values()
-      .find((artist) => artist.id === payload.artistId);
+    const artistOpt = getArtistById(payload.artistId);
 
     if (!artistOpt) {
       return Err({ InvalidPayload: "Artist not found" });
@@ -237,16 +247,14 @@ export default Canister({
     }
 
     // Check if the artwork exists
-    const artworkOpt = artworkStorage.get(payload.artworkId);
+    const artworkOpt = getArtworkById(payload.artworkId);
 
     if ("None" in artworkOpt) {
       return Err({ InvalidPayload: "Artwork not found" });
     }
 
     // Check if the artist exists/owns the artwork
-    const artistOpt = artistStorage
-      .values()
-      .find((artist) => artist.id === artworkOpt.Some.artistId);
+    const artistOpt = getArtistById(artworkOpt.Some.artistId);
 
     if (!artistOpt) {
       return Err({ InvalidPayload: "Artist not found" });
@@ -278,7 +286,7 @@ export default Canister({
       }
 
       // Check if the NFT exists
-      const nftOpt = nftStorage.get(payload.nftId);
+      const nftOpt = getNFTById(payload.nftId);
 
       if ("None" in nftOpt) {
         return Err({ InvalidPayload: "NFT not found" });
@@ -313,14 +321,14 @@ export default Canister({
     Result(Auction, Message),
     (auctionId, artistId, bidAmount) => {
       // check if the artist exists
-      const artistOpt = artistStorage.get(artistId);
+      const artistOpt = getArtistById(artistId);
 
-      if ("None" in artistOpt) {
+      if (!artistOpt) {
         return Err({ InvalidPayload: "Artist not found" });
       }
 
       // Check if the auction exists
-      const auctionOpt = auctionStorage.get(auctionId);
+      const auctionOpt = getAuctionById(auctionId);
 
       if ("None" in auctionOpt) {
         return Err({ InvalidPayload: "Auction not found" });
@@ -340,8 +348,8 @@ export default Canister({
       }
 
       // Check if the provided artistId exists in the artistStorage
-      const bidderOpt = artistStorage.get(artistId);
-      if ("None" in bidderOpt) {
+      const bidderOpt = getArtistById(artistId);
+      if (!bidderOpt) {
         return Err({ InvalidPayload: "Bidder does not exist" });
       }
 
@@ -362,7 +370,7 @@ export default Canister({
   // Function to finalize auction
   finalizeAuction: update([text], Result(Transaction, Message), (auctionId) => {
     // Check if the auction exists
-    const auctionOpt = auctionStorage.get(auctionId);
+    const auctionOpt = getAuctionById(auctionId);
 
     if ("None" in auctionOpt) {
       return Err({ InvalidPayload: "Auction not found" });
@@ -389,16 +397,16 @@ export default Canister({
     }
 
     // Get the NFT details
-    const nftOpt = nftStorage.get(auctionOpt.Some.nftId);
+    const nftOpt = getNFTById(auctionOpt.Some.nftId);
 
     if ("None" in nftOpt) {
       return Err({ InvalidPayload: "NFT not found" });
     }
 
     // Get the highest bidder details (artist)
-    const bidderOpt = artistStorage.get(auctionOpt.Some.highest_bidder_id);
+    const bidderOpt = getArtistById(auctionOpt.Some.highest_bidder_id);
 
-    if ("None" in bidderOpt) {
+    if (!bidderOpt) {
       return Err({ InvalidPayload: "Bidder not found" });
     }
 
